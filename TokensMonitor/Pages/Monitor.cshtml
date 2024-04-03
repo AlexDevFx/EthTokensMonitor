@@ -1,0 +1,190 @@
+﻿@page
+@using TokensMonitor.Configuration
+@using System.Text.Json
+@model TokensMonitor.Pages.Monitor
+@{
+    const string startButton = "start-monitor-btn";
+    const string stopButton = "stop-monitor-btn";
+    const string addressInput = "monitor-wallet-address";
+    const string newAddressInput = "monitor-new-address";
+    const string periodInput = "monitor-period";
+    const string telegramApiKeyInput = "monitor-telegram-api-key";
+    const string telegramChannelIdInput = "monitor-telegram-channel-id";
+    const string addAddressButton = "monitor-add-address";
+    const string removeAddressButton = "monitor-remove-address";
+    const string addressList = "monitor-address-list";
+    const string validationAddressMessage = "monitor-address-error-message";
+
+    string monitoringDataStorageKey = $"monitoring_data_{Model.Address}";
+}
+
+ <div class="row d-flex justify-content-center">
+    <div class="col-md-5">
+        <div>
+            <label asp-for="Address" class="form-label"></label>
+            <div class="">
+                <input asp-for="Address" class="form-control" id="@addressInput" disabled/>
+                <span asp-validation-for="Address"></span>
+            </div>
+        </div>
+         <div>
+            <label asp-for="AddressList" class="form-label"></label>
+            <div class="">
+                <div class="col-md-12">
+                    <select asp-for="AddressList" asp-items="@Model.AddressList" class="form-control form-select" id="@addressList" multiple>
+                    </select>
+                </div>
+                <input class="form-control row-margins" id="@newAddressInput" pattern="^(0x)?[0-9a-fA-F]{40}$"/>
+                <span class="text-danger" style="display: none;" id="@validationAddressMessage">Address is invalid</span>
+                <div class="row-margins">
+                    <button type="button" class="btn" id="@addAddressButton">Add</button>
+                    <button type="button" class="btn" id="@removeAddressButton">Remove</button>
+                </div>
+                <span asp-validation-for="AddressList"></span>
+            </div>
+        </div>
+        <div>
+            <label asp-for="Period" class="form-label"></label>
+            <div class="">
+                <input asp-for="Period" class="form-control" id="@periodInput"/>
+                <span asp-validation-for="Period"></span>
+            </div>
+        </div>
+        <div>
+            <label asp-for="TelegramApiKey" class="form-label"></label>
+            <div class="">
+                <input asp-for="TelegramApiKey" class="form-control" id="@telegramApiKeyInput"/>
+                <span asp-validation-for="TelegramApiKey"></span>
+            </div>
+        </div>
+        <div>
+            <label asp-for="TelegramChannelId" class="form-label"></label>
+            <div class="">
+                <input asp-for="TelegramChannelId" class="form-control" id="@telegramChannelIdInput"/>
+                <span asp-validation-for="TelegramChannelId"></span>
+            </div>
+        </div>
+        <div class="text-center row-margins">
+            <button type="button" id="@startButton" class="btn btn-success" @(Model.IsWorking ? "disabled": "")>Start</button>
+            <button type="button" id="@stopButton" class="btn btn-danger" @(Model.IsWorking ? "": "disabled")>Stop</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="~/lib/signalr/dist/browser/signalr.js"></script>
+    <script src="~/js/walletMonitorHub.js"></script>
+    <script>
+        var monitorData = {
+          address: '@Model.Address',
+          addressList: @JsonSerializer.Serialize(Model.AddressList.Select(e => e.Value).ToList()),
+          period: @Model.Period,
+          telegram: {
+              apiKey: '@Model.TelegramApiKey',
+              channelId: '@Model.TelegramChannelId'
+          }
+        };
+        
+        function getAddressList(){
+            return $("#@addressList option").toArray().map(opt => opt.value);
+        }
+        
+        function updateBalance(data){
+            if (!data || !data.contractAddress) return;
+            
+            const addressBalance = $(`#@addressList option[value='${data.contractAddress}']`);
+            
+            addressBalance?.text(`${data.contractAddress}: ${data.balance}`);
+        }
+    
+        $(document).ready(function () {
+           const addressRegExp = /^(0x)?[0-9a-fA-F]{40}$/;
+           
+           const walletMonitor = initWalletMonitorHub(function (){
+               $("#@startButton").removeAttr("disabled");
+           }, 
+            updateBalance,
+            function () {
+               return localStorage.getItem('@AppConsts.AccessToken');
+           });
+           
+           $("#@startButton").click(function (){
+               const address = $("#@addressInput").val();
+               const period = $("#@periodInput").val();
+               const telegramApiKey = $("#@telegramApiKeyInput").val();
+               const telegramChannelId = $("#@telegramChannelIdInput").val();
+               
+               walletMonitor.start(address, getAddressList(), period, telegramApiKey, telegramChannelId, function (){
+                  $("#@startButton").attr("disabled", "true");
+                  $("#@stopButton").removeAttr("disabled");
+               });
+           });
+           
+           $("#@stopButton").click(function (){
+               walletMonitor.stop(function (){
+                    $("#@stopButton").attr("disabled", "true");
+                    $("#@startButton").removeAttr("disabled");
+               });
+           });
+           
+           $("#@addAddressButton").click(function (){
+               const newAddress = $("#@newAddressInput").val();
+               if (!newAddress || !addressRegExp.test(newAddress)){
+                   $('#@validationAddressMessage').show();
+                   return;
+               }
+               
+               if ($(`#@addressList option[value='${newAddress}']`)?.length > 0) return;
+               
+               $("#@addressList").append(new Option(`${newAddress}: 0`,newAddress));
+               $("#@newAddressInput").val('');
+           });
+           
+           $("#@removeAddressButton").click(function (){
+               $("#@addressList option:selected").remove();
+           });
+           
+           $("#@newAddressInput").on('change', function (){
+                const newAddress = $("#@newAddressInput").val();
+                if (!newAddress || !addressRegExp.test(newAddress)){
+                    $('#@validationAddressMessage').show();
+                }else{
+                    $('#@validationAddressMessage').hide();
+                }
+           });
+           
+           const storedMonitoringData = localStorage.getItem("@monitoringDataStorageKey")
+           if (storedMonitoringData){
+               monitorData = JSON.parse(storedMonitoringData);
+           }else{
+               localStorage.setItem("@monitoringDataStorageKey", JSON.stringify(monitorData));
+           }
+               
+           if (monitorData.address) $("#@addressInput").val(monitorData.address);
+           if (monitorData.period) $("#@periodInput").val(monitorData.period);
+           if (monitorData.telegram.apiKey) $("#@telegramApiKeyInput").val(monitorData.telegram.apiKey);
+           if (monitorData.telegram.channelId) $("#@telegramChannelIdInput").val(monitorData.telegram.channelId);
+           
+           if (monitorData.addressList){
+               for (var adr of monitorData.addressList){
+                   $("#@addressList").append(new Option(adr, adr));
+               }
+           }
+           $(window).bind("beforeunload", function() {
+               walletMonitor.stop(function (){
+                   $("#@stopButton").attr("disabled", "true");
+                   $("#@startButton").removeAttr("disabled");
+               });
+               
+               monitorData.address = $("#@addressInput").val();
+               monitorData.period = $("#@periodInput").val();
+               monitorData.addressList = getAddressList();
+               monitorData.telegram = {
+                   apiKey: $("#@telegramApiKeyInput").val(),
+                   channelId: $("#@telegramChannelIdInput").val()
+               }
+               localStorage.setItem("@monitoringDataStorageKey", JSON.stringify(monitorData));
+           });
+        });
+    </script>
+}

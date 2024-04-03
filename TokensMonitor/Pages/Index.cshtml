@@ -1,0 +1,27 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Sign In";
+}
+<style>
+    .signin-button {
+        margin-top: 5px;
+    }
+</style>
+
+<form method="post">
+    <div class="row d-flex justify-content-center">
+        <div class="col-md-5">
+            <div>
+                <label asp-for="Address" class="form-label"></label>
+                <div class="">
+                    <input asp-for="Address" class="form-control"/>
+                    <span asp-validation-for="Address"></span>
+                </div>
+            </div>
+            <div class="signin-button text-center">
+              <button type="submit" class="btn btn-success">Sign In</button>  
+            </div>
+        </div>
+    </div>
+</form>

@@ -1,0 +1,26 @@
+﻿@page
+@model TokensMonitor.Pages.SignIn
+
+<form method="post">
+    <div class="row d-flex justify-content-center">
+        <div class="col-md-5">
+            <div class="text-center">
+                @if (Model.HasError)
+                {
+                    <p>@Model.Error</p>
+                }
+                else
+                { 
+                    @Html.Raw(Model.Message)
+                }
+            </div>
+            @if (!Model.HasError)
+            {
+                <div class="signin-button text-center">
+                    <button type="submit" class="btn btn-success">Sign In</button>  
+                </div>
+            }
+            
+        </div>
+    </div>
+</form>
